@@ -1,0 +1,19 @@
+{
+  "cobaya_version": "3.5.6",
+  "target": "planck_NPIPE_highl_CamSpec.TTTEEE",
+  "data_archive_sha256": "1978dd0c148a87678b4cf07340401814a3bc81b5cb87dbdccb76565a3a883e15",
+  "metrics": {
+    "baseline": {
+      "chi2": 74638318.28816117,
+      "loglike": -37319159.14408059
+    },
+    "foregrounds": {
+      "chi2": 74657924.29451568,
+      "loglike": -37328962.14725784
+    },
+    "calibration": {
+      "chi2": 75428037.0638596,
+      "loglike": -37714018.5319298
+    }
+  }
+}

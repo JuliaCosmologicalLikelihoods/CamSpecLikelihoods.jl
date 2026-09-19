@@ -1,0 +1,25 @@
+# CamSpecLikelihoods runtime data.
+#
+# Selected Planck NPIPE CamSpec PR4 TTTEEE product, converted from the Cobaya
+# native release by `validation/convert_camspec_pr4_artifact.py`:
+#
+#   source   https://github.com/CobayaSampler/planck_native_data/releases/download/v1/CamSpec_NPIPE.zip
+#   sha256   1978dd0c148a87678b4cf07340401814a3bc81b5cb87dbdccb76565a3a883e15
+#   selected 143x143, 217x217, 143x217, TE, EE -> 9915 of 11286 elements
+#
+# Published: https://doi.org/10.5281/zenodo.22839906 (record 22839906, version
+# 1.0.1). Concept DOI 10.5281/zenodo.22838639 always resolves to the latest
+# version. The archive is immutable; publish a new version rather than editing
+# these hashes.
+#
+# Version 1.0.0 (record 22838640) is superseded and MUST NOT be used: it was
+# archived with a wrapping top-level directory, so its extracted tree hashes to
+# 8ec40ecb3655cfda017ab067d7ce6bcf788b2d9d and fails Julia's integrity check.
+# 1.0.1 is byte-identical data, repackaged with the contents at the archive root.
+
+[camspec_pr4_tttee]
+git-tree-sha1 = "141ca91ad306c262f467de046d1e8bf5e91f3d92"
+
+    [[camspec_pr4_tttee.download]]
+    url = "https://zenodo.org/records/22839906/files/CamSpec_PR4_TTTEEE_v1_20260919.tar.xz"
+    sha256 = "014da657888ca32d90e432589bffc3e7f530a6d7a8d5eeefcb00fc6147cd8071"

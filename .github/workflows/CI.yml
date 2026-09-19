@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ['*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['1.10', '1.11', '1.12']
+        os: [ubuntu-latest]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+          arch: x64
+
+      # Caching may only make the build faster, never change a result: the
+      # artifact is content-addressed by its tree hash, so a stale or corrupt
+      # cache entry is rejected and re-downloaded rather than used.
+      - uses: julia-actions/cache@v2
+        with:
+          cache-name: ${{ matrix.version }}
+
+      # Julia 1.10 does not understand `[sources]`. Install the pinned
+      # CMBForegrounds tag explicitly so 1.10 resolves exactly what 1.11/1.12
+      # resolve recursively.
+      - name: Bootstrap CMBForegrounds v0.4.1 (Julia 1.10 only)
+        if: matrix.version == '1.10'
+        run: |
+          julia --project=. -e '
+            using Pkg
+            Pkg.add(url="https://github.com/JuliaCosmologicalLikelihoods/CMBForegrounds.jl",
+                    rev="v0.4.1")
+          '
+
+      - name: Instantiate
+        run: julia --project=. -e 'using Pkg; Pkg.instantiate()'
+
+      # Prove which CMBForegrounds source was resolved, on every version.
+      - name: Package status
+        run: |
+          julia --project=. -e '
+            using Pkg
+            Pkg.status()
+            Pkg.status(; mode = Pkg.PKGMODE_MANIFEST)
+          '
+
+      # The public path must work outside the test environment, using nothing
+      # but the published Zenodo artifact (doi:10.5281/zenodo.22839906).
+      - name: Public data path outside the test environment
+        run: |
+          julia --project=. -e '
+            using CamSpecLikelihoods
+            path = camspec_pr4_artifact_path()
+            println("artifact path ", path)
+            data = load_camspec_pr4_data()
+            println("data vector   ", length(data.data_vector))
+            @assert length(data.data_vector) == 9915
+            @assert data.spectrum_lmin == [30, 500, 500, 30, 30]
+            @assert data.spectrum_lmax == [2000, 2500, 2500, 2000, 2000]
+            @assert data.spectrum_offsets == [0, 1971, 3972, 5973, 7944, 9915]
+            @assert size(data.inverse_covariance) == (9915, 9915)
+            println("public data path OK")
+          '
+
+      # No environment gates and no filtered test sets: the whole suite runs,
+      # including both package extensions and the AD battery.
+      - uses: julia-actions/julia-runtest@v1
+
+      - uses: julia-actions/julia-processcoverage@v1
+      - uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+
+  hygiene:
+    name: Repository hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      # The published artifact is the runtime-data distribution mechanism.
+      # Bulk science data, archives and resolved manifests never belong in git.
+      - name: Reject bulk data, archives and manifests
+        run: |
+          set -euo pipefail
+          offenders=$(git ls-files \
+            '*.fits' '*.fits.gz' '*.h5' '*.hdf5' '*.pkl' \
+            '*.tar' '*.tar.gz' '*.tar.xz' '*.tgz' '*.zip' \
+            'Manifest.toml' '**/Manifest.toml' \
+            'data/**' '**/__pycache__/**' || true)
+          if [ -n "$offenders" ]; then
+            echo "these must not be committed:"; echo "$offenders"; exit 1
+          fi
+          echo "no bulk data products or manifests are tracked"
+
+      # The Cobaya reference fixture is a small committed .npz on purpose: it
+      # holds theory spectra and three 9915-element predictions, and nothing
+      # else in the repository may grow to that scale.
+      - name: Committed fixtures stay small
+        run: |
+          set -euo pipefail
+          large=$(git ls-files -z | xargs -0 -I{} sh -c 'test -f "{}" && [ $(stat -c%s "{}") -gt 1048576 ] && echo "{} $(stat -c%s "{}")"' || true)
+          if [ -n "$large" ]; then
+            echo "tracked files larger than 1 MiB:"; echo "$large"; exit 1
+          fi
+          size=$(du -sk test/fixtures | cut -f1)
+          echo "test/fixtures is ${size} KiB"
+          if [ "$size" -gt 1024 ]; then echo "fixtures exceeded 1 MiB"; exit 1; fi
