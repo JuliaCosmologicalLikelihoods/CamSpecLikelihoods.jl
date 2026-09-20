@@ -24,6 +24,7 @@ being dominated by `cond(Σ)`; the test suite pins that agreement.
 struct CamSpecPR4Data
     data_vector::Vector{Float64}
     inverse_covariance::Symmetric{Float64,Matrix{Float64}}
+    log_normalization::Float64
     spectrum_lmin::Vector{Int}
     spectrum_lmax::Vector{Int}
     spectrum_offsets::Vector{Int}
@@ -51,31 +52,51 @@ function CamSpecPR4Data(
     length(spectrum_offsets) == 6 || throw(DimensionMismatch("spectrum offsets must have length six"))
     spectrum_offsets[1] == 0 && spectrum_offsets[end] == n ||
         throw(ArgumentError("spectrum offsets must span the complete data vector"))
+    inverse, log_normalization = _inverse_and_log_normalization(lower_cholesky)
     return CamSpecPR4Data(
-        Vector{Float64}(data_vector), _inverse_from_lower_cholesky(lower_cholesky),
+        Vector{Float64}(data_vector), inverse, log_normalization,
         Vector{Int}(spectrum_lmin), Vector{Int}(spectrum_lmax), Vector{Int}(spectrum_offsets),
     )
 end
 
 """
-    _inverse_from_lower_cholesky(lower_cholesky) -> Symmetric
+    gaussian_normalization(data::CamSpecPR4Data) -> Float64
+
+The parameter-independent Gaussian constant `-N/2·log(2π) - ½·logdet Σ`.
+
+[`loglikelihood`](@ref) deliberately excludes it and returns `-χ²/2` only, the
+quantity that depends on nothing but the data, the covariance and the model.
+Add this to recover a normalized log density; the Turing extension does.
+"""
+gaussian_normalization(data::CamSpecPR4Data) = data.log_normalization
+
+"""
+    _inverse_and_log_normalization(lower_cholesky) -> (Symmetric, Float64)
 
 `Σ⁻¹` from the lower Cholesky factor `L`, computed in place by LAPACK `potri!`,
-which inverts from the factor rather than inverting a general matrix.
+which inverts from the factor rather than inverting a general matrix, together
+with the Gaussian log normalization.
+
+The normalization is taken **before** the inversion, while the factor is still
+intact: `logdet Σ = 2 Σ log L[i,i]` is then just a pass over the diagonal. After
+`potri!` the factor is gone and recovering it would cost another `n³/3`.
 
 Only the lower triangle is read and written; whatever sits above the diagonal of
 the input is ignored, and the result is wrapped as `Symmetric(_, :L)` so it is
 never read either.
 """
-function _inverse_from_lower_cholesky(lower_cholesky::AbstractMatrix)
+function _inverse_and_log_normalization(lower_cholesky::AbstractMatrix)
     factor = Matrix{Float64}(lower_cholesky)
     for i in axes(factor, 1)
         isfinite(factor[i, i]) && !iszero(factor[i, i]) || throw(ArgumentError(
             "the Cholesky factor must have a finite, nonzero diagonal; entry $i is $(factor[i, i])",
         ))
     end
+    n = size(factor, 1)
+    log_determinant = 2 * sum(log(abs(factor[i, i])) for i in 1:n)
+    log_normalization = -n / 2 * log(2 * pi) - log_determinant / 2
     LAPACK.potri!('L', factor)
-    return Symmetric(factor, :L)
+    return Symmetric(factor, :L), log_normalization
 end
 
 """

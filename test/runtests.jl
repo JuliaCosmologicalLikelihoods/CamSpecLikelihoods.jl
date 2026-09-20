@@ -11,3 +11,4 @@ using Test
 include("test_core.jl")
 include("test_reference.jl")
 include("test_ad.jl")
+include("test_turing.jl")

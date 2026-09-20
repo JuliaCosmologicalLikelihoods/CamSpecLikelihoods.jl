@@ -13,7 +13,7 @@ import StatsAPI: loglikelihood, predict
 
 export CamSpecPR4Data, CamSpecPR4Parameters, load_camspec_pr4_data
 export camspec_pr4_artifact_path
-export predict, chi2, loglikelihood
+export predict, chi2, loglikelihood, gaussian_normalization
 
 include("data.jl")
 include("likelihood.jl")
