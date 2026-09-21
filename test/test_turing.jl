@@ -166,7 +166,7 @@ end
     # for the 143x217 calibration, so a draw from its unconstrained Normal prior
     # can land on a negative value and throw instead of rejecting.
     chain = sample(model_fn, NUTS(2, 0.65; adtype=AutoForwardDiff()), 2;
-                   initial_params=start, progress=false, verbose=false)
+                   initial_params=Turing.DynamicPPL.InitFromParams(start), progress=false, verbose=false)
     @test size(chain, 1) == 2
     parameters = [k for k in keys(chain) if occursin("Parameter", string(k))]
     @test length(parameters) == 10
